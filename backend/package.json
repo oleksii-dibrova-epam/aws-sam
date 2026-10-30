@@ -4,7 +4,7 @@
     "description": "",
     "scripts": {
         "unit": "jest",
-        "lint": "eslint '*.ts' --quiet --fix",
+        "lint": "eslint '*.ts'",
         "compile": "tsc",
         "test": "npm run compile && npm run unit"
     },

@@ -1,8 +1,7 @@
-import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { APIGatewayProxyResult } from 'aws-lambda';
 
-export const getTestHandler = (event: APIGatewayProxyEvent): APIGatewayProxyResult => {
+export const getTestHandler = (): APIGatewayProxyResult => {
     try {
-
         return {
             statusCode: 200,
             body: JSON.stringify({
@@ -18,7 +17,4 @@ export const getTestHandler = (event: APIGatewayProxyEvent): APIGatewayProxyResu
             }),
         };
     }
-}
-
-
-type Event = {}
+};
