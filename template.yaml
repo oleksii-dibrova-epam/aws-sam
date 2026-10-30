@@ -1,0 +1,57 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: sam-playground
+
+Transform:
+  - AWS::Serverless-2016-10-31
+
+Resources:
+  ApiGatewayApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Dev
+      Auth:
+        ApiKeyRequired: true
+        UsagePlan: 
+          CreateUsagePlan: PER_API
+          Quota: 
+            Limit: 500
+            Period: DAY
+  GetTestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: src/get-test.getTestHandler
+      Runtime: nodejs24.x
+      Architectures:
+        - x86_64
+      Timeout: 3
+      Events:
+        GetTest:
+          Type: Api
+          Properties:
+            Path: /
+            Method: Get
+            RestApiId: !Ref ApiGatewayApi
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2020
+
+Outputs:
+  HelloWorldApi:
+    Description: API Gateway endpoint URL for Prod stage for Hello World function
+    Value: !Sub https://${ApiGatewayApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${ApiGatewayApi.Stage}
+  HelloWorldFunction:
+    Description: Hello World Lambda Function ARN
+    Value: !GetAtt GetTestFunction.Arn
+  HelloWorldFunctionIamRole:
+    Description: Implicit IAM Role created for Hello World function
+    Value: !GetAtt GetTestFunction.Arn
+  ApiKeyId:
+    Value: !Ref ApiGatewayApi.ApiKey
+  ApiKeyConsoleUrl:
+    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/apigateway/main/api-keys/${ApiGatewayApi.ApiKey}?region=${AWS::Region}"
+  ApiKeyGetValueCommand:
+    Value: !Sub "aws apigateway get-api-key --api-key ${ApiGatewayApi.ApiKey} --include-value --query value --output text"
