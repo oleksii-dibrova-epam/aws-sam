@@ -37,11 +37,35 @@ Resources:
           Quota:
             Limit: !FindInMap [StageConfig, !Ref Stage, QuotaLimit]
             Period: DAY
+  GetHomeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: src/handlers/get-home.getHomeHandler
+      Runtime: nodejs24.x
+      Architectures:
+        - x86_64
+      Timeout: 3
+      Environment:
+        Variables:
+          STAGE: !Ref Stage
+      Events:
+        GetHome:
+          Type: Api
+          Properties:
+            Path: /
+            Method: Get
+            RestApiId: !Ref ApiGatewayApi
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2020
   GetTestFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: backend/
-      Handler: src/get-test.getTestHandler
+      Handler: src/handlers/get-test.getTestHandler
       Runtime: nodejs24.x
       Architectures:
         - x86_64
@@ -53,7 +77,7 @@ Resources:
         GetTest:
           Type: Api
           Properties:
-            Path: /
+            Path: /test
             Method: Get
             RestApiId: !Ref ApiGatewayApi
     Metadata:
@@ -75,6 +99,10 @@ Outputs:
   ApiKeyId:
     Value: !Ref ApiGatewayApi.ApiKey
   ApiKeyConsoleUrl:
-    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/apigateway/main/api-keys/${ApiGatewayApi.ApiKey}?region=${AWS::Region}"
+    Value: !Sub
+      - "https://${AWS::Region}.console.aws.amazon.com/apigateway/main/api-keys/${KeyId}?region=${AWS::Region}"
+      - KeyId: !Ref ApiGatewayApi.ApiKey
   ApiKeyGetValueCommand:
-    Value: !Sub "aws apigateway get-api-key --api-key ${ApiGatewayApi.ApiKey} --include-value --query value --output text"
+    Value: !Sub
+      - "aws apigateway get-api-key --api-key ${KeyId} --include-value --query value --output text"
+      - KeyId: !Ref ApiGatewayApi.ApiKey

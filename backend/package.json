@@ -6,7 +6,15 @@
         "unit": "jest",
         "lint": "eslint '*.ts'",
         "compile": "tsc",
-        "test": "npm run compile && npm run unit"
+        "test": "npm run compile && npm run unit",
+        "prepare": "husky || true"
+    },
+    "lint-staged": {
+        "*.{js,jsx,ts,tsx}": [
+            "prettier --write",
+            "eslint --fix --max-warnings=0",
+            "jest --bail --findRelatedTests --passWithNoTests"
+        ]
     },
     "keywords": [],
     "author": "",
@@ -24,7 +32,9 @@
         "eslint": "^10.13.0",
         "eslint-config-prettier": "^10.1.8",
         "eslint-plugin-prettier": "^5.5.7",
+        "husky": "^9.1.7",
         "jest": "^30.5.2",
+        "lint-staged": "^17.6.0",
         "prettier": "^3.9.10",
         "ts-jest": "^29.4.15",
         "ts-node": "^10.9.2",
