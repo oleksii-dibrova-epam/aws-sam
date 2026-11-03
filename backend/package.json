@@ -7,7 +7,7 @@
         "lint": "eslint '*.ts'",
         "compile": "tsc",
         "test": "npm run compile && npm run unit",
-        "prepare": "husky"
+        "prepare": "husky || true"
     },
     "lint-staged": {
         "*.{js,jsx,ts,tsx}": [

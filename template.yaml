@@ -56,6 +56,11 @@ Resources:
             Path: /
             Method: Get
             RestApiId: !Ref ApiGatewayApi
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2020
   GetTestFunction:
     Type: AWS::Serverless::Function
     Properties:
