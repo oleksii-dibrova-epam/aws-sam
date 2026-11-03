@@ -1,0 +1,183 @@
+name: CI/CD
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# PRs: cancel superseded runs.
+# main: every run gets its own group (run_id), so a run waiting for prod approval
+# never blocks the next push. Deploy serialization is handled per environment in deploy.yml.
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('ci-{0}', github.ref) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NODE_VERSION: 24
+
+jobs:
+  # ---------------------------------------------------------------- setup
+  setup:
+    name: setup
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    outputs:
+      cache-key: ${{ steps.key.outputs.value }}
+      version: ${{ steps.version.outputs.version }}
+      tag-exists: ${{ steps.version.outputs.tag-exists }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - id: key
+        run: echo "value=node-modules-${{ runner.os }}-node${{ env.NODE_VERSION }}-${{ hashFiles('backend/package-lock.json') }}" >> "$GITHUB_OUTPUT"
+
+      # Install once, share node_modules with lint/test/build
+      - id: cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: backend/node_modules
+          key: ${{ steps.key.outputs.value }}
+
+      - if: steps.cache.outputs.cache-hit != 'true'
+        run: npm ci --ignore-scripts
+
+      # Release version comes from backend/package.json -> tag vX.Y.Z
+      - id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" > /dev/null; then
+            echo "tag-exists=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Tag v$VERSION already exists. Bump backend/package.json version to enable a production release."
+          else
+            echo "tag-exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ---------------------------------------------------------------- lint + test (parallel)
+  lint:
+    name: lint
+    needs: setup
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: backend/node_modules
+          key: ${{ needs.setup.outputs.cache-key }}
+          fail-on-cache-miss: true
+      - run: npm run compile
+      - run: npm run lint
+
+  test:
+    name: test
+    needs: setup
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: backend/node_modules
+          key: ${{ needs.setup.outputs.cache-key }}
+          fail-on-cache-miss: true
+      - run: npm run unit -- --no-coverage
+
+  # ---------------------------------------------------------------- build
+  build:
+    name: build
+    needs: [setup, lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: backend/node_modules
+          key: ${{ needs.setup.outputs.cache-key }}
+          fail-on-cache-miss: true
+      - uses: aws-actions/setup-sam@341eee193f458fa5aae5d52c94b0c5cf3a1c5a52 # v3
+        with:
+          use-installer: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # template.yaml at repo root (as in your current config)
+      - run: sam build
+
+      # Build once, deploy the same artifact to dev and prod
+      - if: github.event_name == 'push'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sam-build
+          path: .aws-sam/build
+          include-hidden-files: true
+          overwrite: true # allow "Re-run jobs" in the same run
+          if-no-files-found: error
+          retention-days: 7
+
+  # ---------------------------------------------------------------- deploy
+  deploy-dev:
+    name: deploy dev
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build
+    permissions:
+      contents: read
+      id-token: write # OIDC -> AWS
+    uses: ./.github/workflows/deploy.yaml
+    with:
+      environment: development
+      sam-config-env: development
+
+  # Waits for manual approval via the "production" environment's required reviewers.
+  # Skipped when the package.json version is already tagged (no accidental re-release).
+  deploy-prod:
+    name: deploy prod
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.setup.outputs.tag-exists == 'false'
+    needs: [setup, deploy-dev]
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/deploy.yaml
+    with:
+      environment: production
+      sam-config-env: production
+
+  release:
+    name: release tag
+    needs: [setup, deploy-prod]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.setup.outputs.version }}
+        run: |
+          gh release create "v$VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "v$VERSION" \
+            --generate-notes

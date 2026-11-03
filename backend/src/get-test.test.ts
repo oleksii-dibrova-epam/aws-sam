@@ -9,6 +9,7 @@ describe('getTest unit tests', function () {
         expect(response).toEqual({
             body: JSON.stringify({
                 message: 'hello world',
+                env: 'undefined',
             }),
             statusCode: 200,
         });

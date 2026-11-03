@@ -5,17 +5,37 @@ Description: sam-playground
 Transform:
   - AWS::Serverless-2016-10-31
 
+Parameters:
+  Stage:
+    Type: String
+    AllowedValues: [dev, prod]
+    Description: Deployment stage (set per environment via samconfig.toml parameter_overrides)
+
+Mappings:
+  StageConfig:
+    dev:
+      QuotaLimit: 50
+    prod:
+      QuotaLimit: 100
+
+Globals:
+  Api:
+    # Prevents SAM from also creating the implicit extra "Stage" stage
+    OpenApiVersion: 3.0.1
+
 Resources:
   ApiGatewayApi:
     Type: AWS::Serverless::Api
     Properties:
-      StageName: Dev
+      Name: !Sub sam-playground-${Stage}
+      StageName: !Ref Stage
       Auth:
         ApiKeyRequired: true
-        UsagePlan: 
+        UsagePlan:
           CreateUsagePlan: PER_API
-          Quota: 
-            Limit: 500
+          UsagePlanName: !Sub sam-playground-${Stage}
+          Quota:
+            Limit: !FindInMap [StageConfig, !Ref Stage, QuotaLimit]
             Period: DAY
   GetTestFunction:
     Type: AWS::Serverless::Function
@@ -26,6 +46,9 @@ Resources:
       Architectures:
         - x86_64
       Timeout: 3
+      Environment:
+        Variables:
+          STAGE: !Ref Stage
       Events:
         GetTest:
           Type: Api
@@ -43,12 +66,12 @@ Outputs:
   HelloWorldApi:
     Description: API Gateway endpoint URL for Prod stage for Hello World function
     Value: !Sub https://${ApiGatewayApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${ApiGatewayApi.Stage}
-  HelloWorldFunction:
+  GetTestFunction:
     Description: Hello World Lambda Function ARN
     Value: !GetAtt GetTestFunction.Arn
-  HelloWorldFunctionIamRole:
+  GetTestFunctionIamRole:
     Description: Implicit IAM Role created for Hello World function
-    Value: !GetAtt GetTestFunction.Arn
+    Value: !GetAtt GetTestFunctionRole.Arn
   ApiKeyId:
     Value: !Ref ApiGatewayApi.ApiKey
   ApiKeyConsoleUrl:

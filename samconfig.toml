@@ -31,3 +31,27 @@ warm_containers = "EAGER"
 
 [default.local_start_lambda.parameters]
 warm_containers = "EAGER"
+
+# ----------------------------- dev
+[development.deploy.parameters]
+stack_name = "sam-playground-dev"
+pipeline_execution_role = "arn:aws:iam::038084590744:role/aws-sam-cli-managed-developme-PipelineExecutionRole-RKDj5T6irTXy"
+cloudformation_execution_role = "arn:aws:iam::038084590744:role/aws-sam-cli-managed-devel-CloudFormationExecutionRo-hvFTPj5y6fCk"
+s3_bucket = "aws-sam-cli-managed-development-pi-artifactsbucket-09wigedsqros"
+s3_prefix = "sam-playground-dev"
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "Stage=dev"
+confirm_changeset = false
+fail_on_empty_changeset = false
+
+# ----------------------------- prod
+[production.deploy.parameters]
+stack_name = "sam-playground-prod"
+pipeline_execution_role = "arn:aws:iam::038084590744:role/aws-sam-cli-managed-productio-PipelineExecutionRole-ZyA6uM4w9j3w"
+cloudformation_execution_role = "arn:aws:iam::038084590744:role/aws-sam-cli-managed-produ-CloudFormationExecutionRo-9CnrT4aeNWh6"
+s3_bucket = "aws-sam-cli-managed-production-pip-artifactsbucket-aqbytzxkreqa"
+s3_prefix = "sam-playground-prod"
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "Stage=prod"
+confirm_changeset = false
+fail_on_empty_changeset = false
